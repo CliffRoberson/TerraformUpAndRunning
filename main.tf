@@ -32,22 +32,24 @@ resource "aws_security_group" "instance" {
 }
 
 
-resource "aws_launch_configuration" "example" {
-  image_id        = "ami-0fb653ca2d3203ac1"
-  instance_type   = "t2.micro"
-  security_groups = [aws_security_group.instance.id]
+resource "aws_launch_template" "example" {
+  name_prefix   = "example-"
+  image_id      = "ami-050cd642fd83388e4"
+  instance_type = "t2.micro"
 
-  user_data = <<-EOF
+  user_data = base64encode(<<-EOF
               #!/bin/bash
               echo "Hello, World" > index.html
               nohup busybox httpd -f -p ${var.server_port} &
               EOF
+  )
 
-  # Required when using a launch configuration with an auto scaling group.
   lifecycle {
     create_before_destroy = true
   }
 }
+
+
 
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.example.arn
@@ -111,7 +113,10 @@ resource "aws_lb" "example" {
 }
 
 resource "aws_autoscaling_group" "example" {
-  launch_configuration = aws_launch_configuration.example.name
+  launch_template {
+    id      = aws_launch_template.example.id
+    version = "$Latest"
+  }
   vpc_zone_identifier  = data.aws_subnets.default.ids
 
   target_group_arns = [aws_lb_target_group.asg.arn]
@@ -126,6 +131,7 @@ resource "aws_autoscaling_group" "example" {
     propagate_at_launch = true
   }
 }
+
 
 resource "aws_lb_listener_rule" "asg" {
   listener_arn = aws_lb_listener.http.arn
